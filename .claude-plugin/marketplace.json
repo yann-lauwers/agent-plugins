@@ -1,0 +1,15 @@
+{
+  "name": "yannlauwers",
+  "description": "Yann Lauwers' Claude Code plugins.",
+  "owner": {
+    "name": "Yann Lauwers",
+    "url": "https://github.com/yann-lauwers"
+  },
+  "plugins": [
+    {
+      "name": "continuous-compaction",
+      "source": "./plugins/continuous-compaction",
+      "description": "Carries a session past a full context window: at the end of a turn above the fill floor it composes a focus, compacts, and resumes."
+    }
+  ]
+}

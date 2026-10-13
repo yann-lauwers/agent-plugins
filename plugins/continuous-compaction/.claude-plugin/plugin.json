@@ -1,0 +1,49 @@
+{
+  "name": "continuous-compaction",
+  "displayName": "Continuous Compaction",
+  "version": "1.1.0",
+  "description": "At a Stop above the fill floor, composes a one-line focus, types /compact <focus> into this session's own pane, and, after the compaction completes, types a resume line into an empty composer on a turn that is not the owner's.",
+  "author": {
+    "name": "Yann Lauwers",
+    "url": "https://github.com/yann-lauwers"
+  },
+  "homepage": "https://github.com/yann-lauwers/agent-plugins",
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "compaction",
+    "continuous-sessions"
+  ],
+  "userConfig": {
+    "pct_floor": {
+      "type": "number",
+      "title": "Fire at %",
+      "description": "How full the context window must read before a Stop composes a compaction. Fill only grows between compactions, so an older reading above this floor is a lower bound rather than a stale one.",
+      "default": 80,
+      "min": 1,
+      "max": 100
+    },
+    "pct_ceiling": {
+      "type": "number",
+      "title": "Never defer past %",
+      "description": "Every reason to wait — a dispatched agent still in flight, a peer blocker — stops applying at this reading. An orchestrator holds agents at every turn by construction, so without a ceiling its deferral never ends and it dies at 100%. Past this, pending work is named in the focus instead of vetoing the compaction.",
+      "default": 85,
+      "min": 1,
+      "max": 100
+    },
+    "task_stale_s": {
+      "type": "number",
+      "title": "Stop waiting for dispatched work after (seconds)",
+      "description": "Dispatched agents and workflows hold the compaction back so their results do not return into a replaced context. This is how long they may hold one session, counted from the first Stop they deferred at or above the floor and across every task that comes and goes; it restarts once a Stop finds nothing dispatched. An orchestrator's dispatches overlap, so a per-task clock never ran out: measured, 122 of 163 Stops after a held task ended were held again by a newer one. Past this, pending work is named in the compaction focus instead of vetoing it.",
+      "default": 1800,
+      "min": 60,
+      "max": 86400
+    },
+    "armed": {
+      "type": "boolean",
+      "title": "Fire automatically",
+      "description": "Off leaves the /compacting skill and compact-sweep available on demand while nothing fires on its own. This is what a host application sets when it has selected a different continuation strategy.",
+      "default": true
+    }
+  }
+}
