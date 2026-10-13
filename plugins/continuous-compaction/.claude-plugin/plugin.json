@@ -1,8 +1,8 @@
 {
   "name": "continuous-compaction",
   "displayName": "Continuous Compaction",
-  "version": "1.1.0",
-  "description": "At a Stop above the fill floor, composes a one-line focus, types /compact <focus> into this session's own pane, and, after the compaction completes, types a resume line into an empty composer on a turn that is not the owner's.",
+  "version": "2.0.0",
+  "description": "Summarizes a conversation natively when a turn ends above the fill floor, then continues it; /compaction shows and changes the floor for this conversation and for all of them.",
   "author": {
     "name": "Yann Lauwers",
     "url": "https://github.com/yann-lauwers"
@@ -45,5 +45,6 @@
       "description": "Off leaves the /compacting skill and compact-sweep available on demand while nothing fires on its own. This is what a host application sets when it has selected a different continuation strategy.",
       "default": true
     }
-  }
+  },
+  "types": "./types/index.d.ts"
 }

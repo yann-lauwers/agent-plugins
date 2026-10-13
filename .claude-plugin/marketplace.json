@@ -9,7 +9,7 @@
     {
       "name": "continuous-compaction",
       "source": "./plugins/continuous-compaction",
-      "description": "Carries a session past a full context window: at the end of a turn above the fill floor it composes a focus, compacts, and resumes."
+      "description": "Summarizes a conversation when a turn ends above a fill floor, then continues it. /compaction shows and changes the floor for one conversation or all of them."
     }
   ]
 }
