@@ -81,13 +81,13 @@ def _tmux_draft(pane):
     # "clear to type", and typing then APPENDS to the half-written line and sends
     # Enter, submitting it. Match the border forms too.
     #
-    # NBSP is normalized AFTER the border-strip, not before. The strip's own
-    # charset is ASCII space only, so a raw NBSP survives it as the marker's
-    # own significant trailing character while ordinary padding does not --
-    # normalizing first would let the strip consume it like any other space
-    # and lose the one thing that told it apart from padding.
+    # NBSP is normalized AFTER the border-strip, not before, and every strip
+    # names its charset. A bare `str.strip()` counts NBSP as whitespace, so an
+    # empty composer drawn without a border ("❯" + NBSP, the only form current
+    # Claude Code draws) lost its marker space and read as unreadable: every
+    # tmux session deferred and nothing was ever typed there.
     for line in reversed([l for l in r.stdout.splitlines() if l.strip()][-3:]):
-        body = line.strip().lstrip("│|┃ ").rstrip("│|┃ ").replace(_NBSP, " ")
+        body = line.strip(" \t").lstrip("│|┃ ").rstrip("│|┃ ").replace(_NBSP, " ")
         for marker in ("> ", "❯ "):
             if body.startswith(marker):
                 return len(body[len(marker):].strip()) > 0

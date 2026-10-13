@@ -306,6 +306,10 @@ def main():
     # left by an EARLIER build, or one written by hand, reaches here untouched,
     # and this is the line that actually types into the prompt. A leading `!`
     # is shell mode; the guard belongs at the write AND at the send.
+    # A newline is an Enter in the pane, so a line that is not flattened first
+    # submits early and types its remainder as a fresh prompt the prefix check
+    # never saw, and leading whitespace hides a prefix from that check.
+    message = " ".join(str(message).split())[:500]
     if hook_compact_focus is not None:
         message = hook_compact_focus.defuse_prompt_prefix(message)
     elif message.startswith(("!", "/", "#", "@")):
