@@ -8,9 +8,9 @@ Yann Lauwers' Claude Code plugins, served as one marketplace named `yannlauwers`
 
 ## `/compaction`
 
-`/compaction` opens a panel with how full the context is, when the next summary happens, and one row for this conversation and one for all conversations. Click the rows, then use ↑↓ to pick a row, ←→ to change its % by 5, `d` to turn it on or off, `r` to make this conversation follow all conversations again, and `n` to summarize now.
+`/compaction` opens Claude Code's question dialog above the prompt. It says how full the context is and when the next summary happens, then asks what to do: Summarize Now, change this conversation's %, change all conversations' %, or turn summaries off or on here. Under Other you can type a % such as `65`, `all 65`, `on` or `off`. Esc changes nothing.
 
-Typed forms: `/compaction 60` · `/compaction all 70` · `/compaction on|off` · `/compaction all on|off` · `/compaction reset` · `/compaction fire`.
+Typed forms act at once: `/compaction 60` · `/compaction all 70` · `/compaction on|off` · `/compaction all on|off` · `/compaction reset` · `/compaction fire`.
 
 The all-conversations values also sit in `/config`, as "Summarize conversations automatically" and "Summarize at % full".
 

@@ -178,12 +178,6 @@ export function isInert(tokensBefore: number | null, tokensAfter: number | null)
   return tokensAfter / tokensBefore >= INERT_KEPT_RATIO
 }
 
-export function fillBar(fill: number | null): string {
-  if (fill === null) return ''
-  const filled = Math.min(10, Math.max(0, Math.round(fill / 10)))
-  return '▮'.repeat(filled) + '▯'.repeat(10 - filled)
-}
-
 export type NextInput = {
   now: number
   effective: Effective
@@ -196,8 +190,8 @@ export type NextInput = {
 
 export function nextLine(input: NextInput): string {
   const { effective: here, ledger, phase } = input
-  if (phase === 'composing') return 'now: choosing what to keep'
-  if (phase === 'summarizing') return 'now: summarizing'
+  if (phase === 'composing') return 'choosing what to keep'
+  if (phase === 'summarizing') return 'summarizing now'
   if (ledger.isNowAfterTurn) return 'at the end of this turn'
   if (!here.isOn) return 'never, until turned on'
   if (ledger.isInert) return 'never: the last summary kept most of the conversation; press n to summarize now'
@@ -211,4 +205,59 @@ export function nextLine(input: NextInput): string {
     return `summarized ${at}, from ${input.clock(ledger.lastAttemptAt + COOLDOWN_MS)}`
   }
   return `summarized ${at}`
+}
+
+export type DialogStep = { ask: 'here' | 'all' }
+
+export const START_HERE = 'This Conversation…'
+export const START_ALL = 'All Conversations…'
+export const SUMMARIZE_NOW = 'Summarize Now'
+const FLOOR_CHOICES = [60, 70, 80, 90]
+
+function scopeSentence(here: Effective, all: AllSessions): string {
+  const everywhere = all.isArmed ? `above ${all.floor}%` : 'off'
+  if (!here.isOn) return `This conversation isn't summarized automatically (all conversations: ${everywhere}).`
+  const own = `This conversation is summarized when a turn ends above ${here.floor}%`
+  return here.isOnInherited && here.isFloorInherited ? `${own}, like all conversations.` : `${own} (all conversations: ${everywhere}).`
+}
+
+export function startQuestion(here: Effective, all: AllSessions, fill: number | null, next: string): string {
+  const context = fill === null ? "Context use isn't known yet." : `Context is ${Math.round(fill)}% full.`
+  const plain = `summarized when a turn ends above ${here.floor}%`
+  const now = here.isOn && next !== plain ? ` Right now: ${next}.` : ''
+  return `${context} ${scopeSentence(here, all)}${now} What do you want to do?`
+}
+
+export function startOptions(here: Effective): string[] {
+  return [SUMMARIZE_NOW, START_HERE, START_ALL, here.isOn ? 'Turn Off Here' : 'Turn On Here']
+}
+
+function otherFloors(current: number): number[] {
+  return FLOOR_CHOICES.filter(value => value !== current).slice(0, 3)
+}
+
+export function hereOptions(here: Effective, all: AllSessions): string[] {
+  return [`Follow All (${all.floor}%)`, ...otherFloors(here.floor).map(value => `${value}%`)]
+}
+
+export function allOptions(all: AllSessions): string[] {
+  return [...otherFloors(all.floor).map(value => `${value}%`), all.isArmed ? 'Turn Off Everywhere' : 'Turn On Everywhere']
+}
+
+export function readStart(answer: string, here: Effective): Command | DialogStep | { usage: string } {
+  if (answer === SUMMARIZE_NOW) return { kind: 'now' }
+  if (answer === START_HERE) return { ask: 'here' }
+  if (answer === START_ALL) return { ask: 'all' }
+  if (answer === 'Turn Off Here' || answer === 'Turn On Here') return { kind: 'switch', scope: 'here', isOn: !here.isOn }
+  return parseCommand(answer)
+}
+
+export function readFloor(step: DialogStep, answer: string, all: AllSessions): Command | { usage: string } {
+  if (step.ask === 'here' && answer.startsWith('Follow All')) return { kind: 'reset' }
+  if (step.ask === 'all' && (answer === 'Turn Off Everywhere' || answer === 'Turn On Everywhere')) {
+    return { kind: 'switch', scope: 'all', isOn: !all.isArmed }
+  }
+  const value = Number(answer.trim().replace(/%$/, ''))
+  if (Number.isInteger(value) && value >= 1 && value <= 100) return { kind: 'floor', scope: step.ask, value }
+  return { usage: 'Type a whole number from 1 to 100.' }
 }

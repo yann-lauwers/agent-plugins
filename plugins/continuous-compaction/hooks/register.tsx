@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, PluginOptions, Register } from 'claude-code'
 
-import type { Ledger, Outcome, Overrides, Phase, RowAction, RowView, Trigger, TurnFacts } from '../types'
+import type { Ledger, Outcome, Overrides, Phase, Trigger, TurnFacts } from '../types'
 import {
   AUTO_RESUME_GAP_MS,
   FORK_RACE_MS,
@@ -11,19 +11,23 @@ import {
   decideAuto,
   defusePrefix,
   effective,
+  allOptions,
   fallbackFocus,
-  fillBar,
   focusPrompt,
+  hereOptions,
   inFlightDispatches,
   isInert,
   nextLine,
   parseCommand,
   parseFocus,
+  readFloor,
+  readStart,
+  startOptions,
+  startQuestion,
 } from './rules'
 import type { AllSessions, Command } from './rules'
 
 const PLUGIN = 'continuous-compaction'
-const PANE = 'compaction'
 const KEY_ARMED = `${PLUGIN}.armed`
 const KEY_FLOOR = `${PLUGIN}.pct_floor`
 
@@ -92,10 +96,12 @@ async function summarize($: EngineInterface, trigger: Trigger) {
   })
   if (!isClaimed) return
   try {
-    $.ui.status('Summarizing the conversation…')
+    $.ui.status('Choosing what to keep')
     const facts = await read($, turnFacts)
     const { focus, resume, focusFrom } = await compose($, facts)
+    $.ui.log(`${trigger} focus from ${focusFrom}: ${focus}`, { to: 'debug' })
     await update($, phase, () => 'summarizing')
+    $.ui.status('Summarizing the conversation')
     const result = await $.session.compact({ instructions: focus })
     const at = await $.clock.now()
     if (result.skip !== undefined) {
@@ -137,32 +143,8 @@ async function setAll($: EngineInterface, key: string, value: boolean | number):
   return 'deny' in result && result.deny ? result.deny : null
 }
 
-async function apply($: EngineInterface, all: AllSessions, action: RowAction) {
-  const current = effective(await read($, overrides), all)
-  if (action.act === 'reset') {
-    await update($, overrides, () => ({ enabled: null, floor: null }))
-  } else if (action.act === 'now') {
-    await summarizeNow($)
-  } else if (action.act === 'toggle' && action.row === 'here') {
-    await update($, overrides, value => ({ ...value, enabled: !current.isOn }))
-  } else if (action.act === 'toggle') {
-    const denied = await setAll($, KEY_ARMED, !all.isArmed)
-    if (denied) $.ui.toast(denied)
-  } else if (action.row === 'here') {
-    await update($, overrides, value => ({ ...value, floor: clampFloor(current.floor + action.delta) }))
-  } else {
-    const denied = await setAll($, KEY_FLOOR, clampFloor(all.floor + action.delta))
-    if (denied) $.ui.toast(denied)
-  }
-}
-
 async function runCommand($: EngineInterface, all: AllSessions, command: Command): Promise<string | undefined> {
-  if (command.kind === 'open') {
-    const opened = await $.ui.open({ id: PANE, title: 'Conversation summary', focus: true, closeOnEscape: true })
-    if (opened.isPlaced) return undefined
-    const here = effective(await read($, overrides), all)
-    return `The panel can't open here. This conversation is summarized ${here.isOn ? `above ${here.floor}%` : 'never'}.`
-  }
+  if (command.kind === 'open') return undefined
   if (command.kind === 'reset') {
     await update($, overrides, () => ({ enabled: null, floor: null }))
     return `This conversation follows all conversations: ${all.isArmed ? `above ${all.floor}%` : 'off'}.`
@@ -182,6 +164,31 @@ async function runCommand($: EngineInterface, all: AllSessions, command: Command
     return `This conversation is summarized above ${command.value}%.`
   }
   return (await setAll($, KEY_FLOOR, command.value)) ?? `All conversations are summarized above ${command.value}%.`
+}
+
+async function askDialog($: EngineInterface, all: AllSessions): Promise<string | undefined> {
+  const here = effective(await read($, overrides), all)
+  const next = nextLine({
+    now: await $.clock.now(),
+    effective: here,
+    all,
+    phase: await read($, phase),
+    ledger: await read($, ledger),
+    heldCount: (await read($, turnFacts))?.dispatched.length ?? 0,
+    clock: clockTime,
+  })
+  const question = startQuestion(here, all, await read($, fill), next)
+  const started = await $.ui.ask(question, { header: 'Summary', options: startOptions(here) }).catch(() => null)
+  if (started === null) return undefined
+  const first = readStart(started, here)
+  if ('usage' in first) return first.usage
+  if ('kind' in first) return runCommand($, all, first)
+  const asked = first.ask === 'here' ? 'Summarize this conversation above which %?' : 'Summarize all conversations above which %?'
+  const options = first.ask === 'here' ? hereOptions(here, all) : allOptions(all)
+  const picked = await $.ui.ask(asked, { header: 'Summary', options }).catch(() => null)
+  if (picked === null) return undefined
+  const chosen = readFloor(first, picked, all)
+  return 'usage' in chosen ? chosen.usage : runCommand($, all, chosen)
 }
 
 export const register: Register = (on, options) => {
@@ -292,61 +299,7 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'compaction' }, async ($, e) => {
     const parsed = parseCommand(e.args)
     if ('usage' in parsed) return { text: parsed.usage }
-    const text = await runCommand($, all, parsed)
+    const text = parsed.kind === 'open' ? await askDialog($, all) : await runCommand($, all, parsed)
     return text === undefined ? {} : { text }
-  })
-
-  on('ui.message', { requestId: PANE }, async ($, e) => {
-    await apply($, all, e.data as RowAction)
-    return {}
-  })
-
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const here = effective(await read($, overrides), all)
-    const reading = await read($, fill)
-    const facts = await read($, turnFacts)
-    const rows: RowView[] = [
-      { id: 'here', label: 'This conversation', ...here },
-      { id: 'all', label: 'All conversations', isOn: all.isArmed, isOnInherited: false, floor: all.floor, isFloorInherited: false },
-    ]
-    const next = nextLine({
-      now: await $.clock.now(),
-      effective: here,
-      all,
-      phase: await read($, phase),
-      ledger: await read($, ledger),
-      heldCount: facts?.dispatched.length ?? 0,
-      clock: clockTime,
-    })
-
-    const context = reading === null ? 'unknown' : `${Math.round(reading)}% full  ${fillBar(reading)}`
-
-    if (e.surface !== 'terminal' && e.surface !== 'desktop') {
-      const { Box, Text } = $.ui.resolve(e)
-      return (
-        <Box flexDirection="column" gap={1}>
-          <Text bold>Conversation summary</Text>
-          <Text>{`Context   ${context}`}</Text>
-          <Text>{`Next      ${next}`}</Text>
-          {rows.map(row => (
-            <Text>{`${row.label}: ${row.isOn ? 'on' : 'off'}, ${row.floor}%${row.isFloorInherited ? ' (all)' : ''}`}</Text>
-          ))}
-          <Text dimColor>Change these with /compaction.</Text>
-        </Box>
-      )
-    }
-
-    const { Box, Text, Client } = $.ui.resolve(e)
-    return (
-      <Box flexDirection="column" gap={1}>
-        <Text bold>Conversation summary</Text>
-        <Box flexDirection="column">
-          <Text>{`Context   ${context}`}</Text>
-          <Text>{`Next      ${next}`}</Text>
-        </Box>
-        <Client key="rows" module="./rows.tsx" props={{ rows }} />
-        <Text dimColor>click the rows, then ↑↓ row · ←→ % · d on/off · r reset · n summarize now · esc close</Text>
-      </Box>
-    )
   })
 }

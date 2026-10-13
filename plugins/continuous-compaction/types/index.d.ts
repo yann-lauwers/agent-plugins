@@ -31,23 +31,6 @@ export type Ledger = {
   last: Outcome | null
 }
 
-export type RowAction =
-  | { act: 'step'; row: 'here' | 'all'; delta: number }
-  | { act: 'toggle'; row: 'here' | 'all' }
-  | { act: 'reset' }
-  | { act: 'now' }
-
-export type RowView = {
-  id: 'here' | 'all'
-  label: string
-  isOn: boolean
-  isOnInherited: boolean
-  floor: number
-  isFloorInherited: boolean
-}
-
-export type RowsProps = { rows: readonly RowView[] }
-
 declare module 'claude-code' {
   interface PluginState {
     'continuous-compaction': {
